@@ -103,7 +103,7 @@ func TestCommonPrefixLength(t *testing.T) {
 		{"1234abcdef", "1234xyz", 4},
 		{"1234", "1234xyz", 4},
 	} {
-		actual := commonPrefixLength([]rune(tc.Text1), []rune(tc.Text2))
+		actual := commonPrefixLength(stringToChars(tc.Text1, false), stringToChars(tc.Text2, false))
 		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
@@ -147,13 +147,13 @@ func BenchmarkDiffCommonSuffix(b *testing.B) {
 func BenchmarkCommonLength(b *testing.B) {
 	data := []struct {
 		name string
-		x, y []rune
+		x, y []DiffChar
 	}{
-		{name: "empty", x: nil, y: []rune{}},
-		{name: "short", x: []rune("AABCC"), y: []rune("AA-CC")},
+		{name: "empty", x: nil, y: []DiffChar{}},
+		{name: "short", x: stringToChars("AABCC", false), y: stringToChars("AA-CC", false)},
 		{name: "long",
-			x: []rune(strings.Repeat("A", 1000) + "B" + strings.Repeat("C", 1000)),
-			y: []rune(strings.Repeat("A", 1000) + "-" + strings.Repeat("C", 1000)),
+			x: stringToChars(strings.Repeat("A", 1000) + "B" + strings.Repeat("C", 1000), false),
+			y: stringToChars(strings.Repeat("A", 1000) + "-" + strings.Repeat("C", 1000), false),
 		},
 	}
 	b.Run("prefix", func(b *testing.B) {
@@ -190,7 +190,7 @@ func TestCommonSuffixLength(t *testing.T) {
 		{"1234", "xyz1234", 4},
 		{"123", "a3", 1},
 	} {
-		actual := commonSuffixLength([]rune(tc.Text1), []rune(tc.Text2))
+		actual := commonSuffixLength(stringToChars(tc.Text1, false), stringToChars(tc.Text2, false))
 		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
@@ -288,8 +288,8 @@ func TestDiffBisectSplit(t *testing.T) {
 	for _, tc := range []TestCase{
 		{"STUV\x05WX\x05YZ\x05[", "WĺĻļ\x05YZ\x05ĽľĿŀZ"},
 	} {
-		diffs := dmp.diffBisectSplit([]rune(tc.Text1),
-			[]rune(tc.Text2), 7, 6, time.Now().Add(time.Hour))
+		diffs := dmp.diffBisectSplit(stringToChars(tc.Text1, false),
+			stringToChars(tc.Text2, false), false, 7, 6, time.Now().Add(time.Hour))
 
 		for _, d := range diffs {
 			assert.True(t, utf8.ValidString(d.Text))
@@ -312,10 +312,10 @@ func TestDiffLinesToChars(t *testing.T) {
 	dmp := New()
 
 	for i, tc := range []TestCase{
-		{"", "alpha\r\nbeta\r\n\r\n\r\n", "", "\u0001\u0002\u0003\u0003", []string{"", "alpha\r\n", "beta\r\n", "\r\n"}},
-		{"a", "b", "\u0001", "\u0002", []string{"", "a", "b"}},
+		{"", "alpha\r\nbeta\r\n\r\n\r\n", "", "\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03\x00\x00\x00\x03", []string{"", "alpha\r\n", "beta\r\n", "\r\n"}},
+		{"a", "b", "\x00\x00\x00\x01", "\x00\x00\x00\x02", []string{"", "a", "b"}},
 		// Omit final newline.
-		{"alpha\nbeta\nalpha", "", "\u0001\u0002\u0003", "", []string{"", "alpha\n", "beta\n", "alpha"}},
+		{"alpha\nbeta\nalpha", "", "\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03", "", []string{"", "alpha\n", "beta\n", "alpha"}},
 	} {
 		actualChars1, actualChars2, actualLines := dmp.DiffLinesToChars(tc.Text1, tc.Text2)
 		assert.Equal(t, tc.ExpectedChars1, actualChars1, fmt.Sprintf("Test case #%d, %#v", i, tc))
@@ -323,19 +323,22 @@ func TestDiffLinesToChars(t *testing.T) {
 		assert.Equal(t, tc.ExpectedLines, actualLines, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
-	// More than 256 to reveal any 8-bit limitations.
-	n := 300
+	// More than 65536 to reveal any 16-bit limitations.
+	n := 70000
 	lineList := []string{
 		"", // Account for the initial empty element of the lines array.
 	}
-	var charList []rune
+	var charList []byte
 	for x := 1; x < n+1; x++ {
 		lineList = append(lineList, strconv.Itoa(x)+"\n")
-		charList = append(charList, rune(x))
+		charList = append(charList, byte((x >> 24) & 0xFF))
+		charList = append(charList, byte((x >> 16) & 0xFF))
+		charList = append(charList, byte((x >> 8) & 0xFF))
+		charList = append(charList, byte(x & 0xFF))
 	}
 	lines := strings.Join(lineList, "")
 	chars := string(charList)
-	assert.Equal(t, n, utf8.RuneCountInString(chars))
+	// assert.Equal(t, n, utf8.RuneCountInString(chars))
 
 	actualChars1, actualChars2, actualLines := dmp.DiffLinesToChars(lines, "")
 	assert.Equal(t, chars, actualChars1)
@@ -356,8 +359,8 @@ func TestDiffCharsToLines(t *testing.T) {
 	for i, tc := range []TestCase{
 		{
 			Diffs: []Diff{
-				{DiffEqual, "\u0001\u0002\u0001"},
-				{DiffInsert, "\u0002\u0001\u0002"},
+				{DiffEqual, "\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x01"},
+				{DiffInsert, "\x00\x00\x00\x02\x00\x00\x00\x01\x00\x00\x00\x02"},
 			},
 			Lines: []string{"", "alpha\n", "beta\n"},
 
@@ -371,17 +374,20 @@ func TestDiffCharsToLines(t *testing.T) {
 		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
-	// More than 256 to reveal any 8-bit limitations.
-	n := 300
+	// More than 65536 to reveal any 16-bit limitations.
+	n := 70000
 	lineList := []string{
 		"", // Account for the initial empty element of the lines array.
 	}
-	charList := []rune{}
+	charList := []byte{}
 	for x := 1; x <= n; x++ {
 		lineList = append(lineList, strconv.Itoa(x)+"\n")
-		charList = append(charList, rune(x))
+		charList = append(charList, byte((x >> 24) & 0xFF))
+		charList = append(charList, byte((x >> 16) & 0xFF))
+		charList = append(charList, byte((x >> 8) & 0xFF))
+		charList = append(charList, byte(x & 0xFF))
 	}
-	assert.Equal(t, n, len(charList))
+	assert.Equal(t, n * 4, len(charList))
 
 	actual := dmp.DiffCharsToLines([]Diff{Diff{DiffDelete, string(charList)}}, lineList)
 	assert.Equal(t, []Diff{Diff{DiffDelete, strings.Join(lineList, "")}}, actual)
@@ -1453,9 +1459,9 @@ func BenchmarkDiffMainRunesLargeLines(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		text1, text2, linearray := dmp.DiffLinesToRunes(s1, s2)
+		text1, text2, linearray := dmp.diffLinesToDiffChars(s1, s2)
 
-		diffs := dmp.DiffMainRunes(text1, text2, false)
+		diffs := dmp.diffMainChars(text1, text2, true, false, time.Time{})
 		diffs = dmp.DiffCharsToLines(diffs, linearray)
 	}
 }

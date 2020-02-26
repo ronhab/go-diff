@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRunesIndexOf(t *testing.T) {
+func TestCharsIndexOf(t *testing.T) {
 	type TestCase struct {
 		Pattern string
 		Start   int
@@ -36,7 +36,7 @@ func TestRunesIndexOf(t *testing.T) {
 		{"abcdef", 2, -1},
 		{"e", 6, -1},
 	} {
-		actual := runesIndexOf([]rune("abcde"), []rune(tc.Pattern), tc.Start)
+		actual := charsIndexOf(stringToChars("abcde", false), stringToChars(tc.Pattern, false), tc.Start)
 		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
