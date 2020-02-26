@@ -1422,19 +1422,15 @@ func TestDiffMainWithCheckLines(t *testing.T) {
 func TestDiffMainWithCheckLinesLarge(t *testing.T) {
 	dmp := New()
 	dmp.DiffTimeout = 0
-	const lineToChange = 1234
-	lines := make([]string, 70000)
+	lines := make([]string, 60000)
 	for i := 0; i < len(lines); i++ {
 		lines[i] = strconv.Itoa(i) + "\n"
 	}
 	s1 := strings.Join(lines, "")
-	lines[lineToChange] = "CHANGED\n"
-	s2 := strings.Join(lines, "")
+	s2 := strings.Repeat("NOTHING", 20)
 	expected := []Diff{ 
-		Diff{DiffEqual, strings.Join(lines[:lineToChange], "")},
-		Diff{DiffDelete, strconv.Itoa(lineToChange)},
-		Diff{DiffInsert, "CHANGED"},
-		Diff{DiffEqual, "\n" + strings.Join(lines[lineToChange+1:], "")},
+		Diff{DiffDelete, s1},
+		Diff{DiffInsert, s2},
 	}
 	actual := dmp.DiffMain(s1, s2, true)
 	assert.Equal(t, expected, actual)
