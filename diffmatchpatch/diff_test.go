@@ -1419,6 +1419,27 @@ func TestDiffMainWithCheckLines(t *testing.T) {
 	}
 }
 
+func TestDiffMainWithCheckLinesLarge(t *testing.T) {
+	dmp := New()
+	dmp.DiffTimeout = 0
+	const lineToChange = 1234
+	lines := make([]string, 70000)
+	for i := 0; i < len(lines); i++ {
+		lines[i] = strconv.Itoa(i) + "\n"
+	}
+	s1 := strings.Join(lines, "")
+	lines[lineToChange] = "CHANGED\n"
+	s2 := strings.Join(lines, "")
+	expected := []Diff{ 
+		Diff{DiffEqual, strings.Join(lines[:lineToChange], "")},
+		Diff{DiffDelete, strconv.Itoa(lineToChange)},
+		Diff{DiffInsert, "CHANGED"},
+		Diff{DiffEqual, "\n" + strings.Join(lines[lineToChange+1:], "")},
+	}
+	actual := dmp.DiffMain(s1, s2, true)
+	assert.Equal(t, expected, actual)
+}
+
 func BenchmarkDiffMain(bench *testing.B) {
 	s1 := "`Twas brillig, and the slithy toves\nDid gyre and gimble in the wabe:\nAll mimsy were the borogoves,\nAnd the mome raths outgrabe.\n"
 	s2 := "I am the very model of a modern major general,\nI've information vegetable, animal, and mineral,\nI know the kings of England, and I quote the fights historical,\nFrom Marathon to Waterloo, in order categorical.\n"
