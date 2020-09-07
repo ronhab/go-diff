@@ -192,6 +192,16 @@ func (dmp *DiffMatchPatch) diffCompute(text1, text2 []DiffChar, encoded bool, ch
 	return dmp.diffBisect(text1, text2, encoded, deadline)
 }
 
+func (dmp *DiffMatchPatch) DiffLineMode(src, dst string) []Diff {
+	var deadline time.Time
+	if dmp.DiffTimeout > 0 {
+		deadline = time.Now().Add(dmp.DiffTimeout)
+	}
+	text1, text2, linearray := dmp.diffLinesToDiffChars(src, dst)
+	diffs := dmp.diffMainChars(text1, text2, true, false, deadline)
+	return dmp.DiffCharsToLines(diffs, linearray)
+}
+
 // diffLineMode does a quick line-level diff on both []DiffChars, then rediff the parts for greater accuracy. This speedup can produce non-minimal diffs.
 func (dmp *DiffMatchPatch) diffLineMode(text1, text2 []DiffChar, deadline time.Time) []Diff {
 	// Scan the text on a line-by-line basis first.
